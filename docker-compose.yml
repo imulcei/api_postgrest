@@ -4,10 +4,10 @@ services:
     ports:
       - "3000:3000"
     environment:
-      PGRST_DB_URI: postgres://authenticator:mysecretpassword@api-test-db:5432/api-test
-      PGRST_OPENAPI_SERVER_PROXY_URI: http://127.0.0.1:3000
-      PGRST_ANON_ROLE: web_anon
+      PGRST_DB_URI: postgres://authenticator:mysecretpassword@api-test-db:5432/apitest
       PGRST_DB_SCHEMAS: api
+      PGRST_ANON_ROLE: web_anon
+      PGRST_OPENAPI_SERVER_PROXY_URI: http://127.0.0.1:3000
     depends_on:
       - postgres
   postgres:
@@ -16,7 +16,7 @@ services:
     environment:
       - POSTGRES_USER=${POSTGRES_USER}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-      - POSTGRES_DB=api-test
+      - POSTGRES_DB=apitest
     ports:
       - "5432:5432"
     restart: always

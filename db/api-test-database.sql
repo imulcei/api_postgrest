@@ -15,3 +15,5 @@ GRANT SELECT ON api.todos TO web_anon;
 
 CREATE ROLE authenticator noinherit login PASSWORD 'mysecretpassword';
 GRANT web_anon TO authenticator;
+GRANT USAGE ON SCHEMA api TO authenticator;
+GRANT SELECT ON ALL TABLES IN SCHEMA api TO authenticator;
