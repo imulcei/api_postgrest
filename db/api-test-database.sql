@@ -17,3 +17,10 @@ CREATE ROLE authenticator noinherit login PASSWORD 'mysecretpassword';
 GRANT web_anon TO authenticator;
 GRANT USAGE ON SCHEMA api TO authenticator;
 GRANT SELECT ON ALL TABLES IN SCHEMA api TO authenticator;
+
+-- trusted user
+CREATE ROLE todo_user nologin;
+GRANT todo_user to authenticator;
+
+GRANT USAGE ON SCHEMA api TO todo_user;
+GRANT ALL ON api.todos to todo_user;
