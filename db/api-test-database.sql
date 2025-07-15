@@ -11,7 +11,7 @@ INSERT INTO api.todos (task) VALUES ('finish tutorial 0'), ('pat pat');
 
 CREATE ROLE web_anon nologin;
 GRANT USAGE ON SCHEMA api TO web_anon;
-GRANT SELECT ON api.todos TO web_anon;
+GRANT ALL ON api.todos TO web_anon;
 
 CREATE ROLE authenticator noinherit login PASSWORD 'mysecretpassword';
 GRANT web_anon TO authenticator;
