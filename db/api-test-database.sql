@@ -24,3 +24,20 @@ GRANT todo_user to authenticator;
 
 GRANT USAGE ON SCHEMA api TO todo_user;
 GRANT ALL ON api.todos to todo_user;
+
+
+-- user storage
+CREATE SCHEMA IF NOT EXISTS basic_auth;
+
+create table
+basic_auth.users (
+  email    text primary key check ( email ~* '^.+@.+\..+$' ),
+  pass     text not null check (length(pass) < 512),
+  role     name not null check (length(role) < 512)
+);
+
+
+create role anon noinherit;
+create role authenticator noinherit;
+grant anon to authenticator;
+

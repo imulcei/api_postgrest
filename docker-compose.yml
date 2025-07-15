@@ -26,6 +26,8 @@ services:
     volumes:
       # - ./postgresql/data:/var/lib/postgresql/data # Désactivation du montage du volume de façon à ne pas avoir plein de fichiers sur le disque et sur Git. A reactiver en production si backup nécessaire.
       - ./db/api-test-database.sql:/docker-entrypoint-initdb.d/api-test-database.sql
+      - ./db/function-api-database.sql:/docker-entrypoint-initdb.d/function-api-database.sql
+
     healthcheck:
       test: ["CMD-SHELL", "psql -U ${POSTGRES_USER} -d apitest -c 'SELECT 1' || exit 1"] # Tentative de connection avec requête SELECT. Si okay -> le container est considéré comme healthy.
       interval: 30s
