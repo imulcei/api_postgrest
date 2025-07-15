@@ -129,7 +129,3 @@ basic_auth.users (
 );
 
 
-create role anon noinherit;
-create role authenticator noinherit;
-grant anon to authenticator;
-
