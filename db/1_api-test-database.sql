@@ -80,17 +80,50 @@ BEGIN
 END;
 $$;
 
--- CREATE EXTENSION pgjwt;
 
--- générer le JWL dans le SQL
-CREATE OR REPLACE FUNCTION jwt_test(OUT token text)
-	RETURNS TEXT
-	LANGUAGE plpgsql
+
+CREATE OR REPLACE FUNCTION api.jwt_url_encode(data BYTEA)
+  RETURNS TEXT
+LANGUAGE SQL
 AS $$
-BEGIN
-	SELECT public.sign(row_to_json(r), 'jaime_lesmirabelles_etleslasagnes') AS token
-	FROM (SELECT 'my_role'::TEXT AS role, extract(epoch FROM now())::INTEGER + 300 AS exp) r;
-END;
+	SELECT translate(encode(data, 'base64'), E'+/=\n', '-_'); -- 
+$$;
+
+CREATE OR REPLACE FUNCTION api.jwt_algorithm_sign(signables TEXT, secret TEXT, algorithm TEXT)
+  RETURNS TEXT
+LANGUAGE SQL
+AS $$
+WITH
+    alg AS (
+     SELECT CASE
+     WHEN algorithm = 'HS256'
+       THEN 'sha256'
+     WHEN algorithm = 'HS384'
+       THEN 'sha384'
+     WHEN algorithm = 'HS512'
+       THEN 'sha512'
+     ELSE '' END AS id) -- hmac throws error
+SELECT api.jwt_url_encode(hmac(signables, secret, alg.id))
+FROM alg;
+$$;
+
+-- Création d'un JWT à partir d'une clef secrète
+-- PAYLOAD : email + role ? ??
+CREATE OR REPLACE FUNCTION api.jwt_sign(payload JSON, secret TEXT)
+RETURNS TEXT
+LANGUAGE SQL
+AS $$
+WITH
+    header AS (
+      SELECT api.jwt_url_encode(convert_to('{"alg":"HS256","typ":"JWT"}', 'utf8')) AS data),
+    payload AS (
+      SELECT api.jwt_url_encode(convert_to(payload :: TEXT, 'utf8')) AS data),
+    signables AS (
+      SELECT header.data || '.' || payload.data AS data
+      FROM header, payload
+  )
+SELECT signables.data || '.' || api.jwt_algorithm_sign(signables.data, secret, 'HS256')
+FROM signables;
 $$;
 
 -- connexion
@@ -105,7 +138,7 @@ BEGIN
 		RAISE invalid_password USING message = 'invalid user or password';
 	END IF;
 	
-	SELECT public.sign(row_to_json(r), 'jaime_lesmirabelles_etleslasagnes') AS token
+	SELECT api.jwt_sign(row_to_json(r), 'jaime_lesmirabelles_etleslasagnes') /*AS token*/
 	FROM (SELECT _role AS role, login.email AS email, extract(epoch FROM now())::integer + 60*60 AS exp) r INTO token;
 END;
 $$;
@@ -116,16 +149,3 @@ GRANT EXECUTE ON FUNCTION api.login(text, text) TO web_anon;
 GRANT EXECUTE ON FUNCTION api.user_role(text, text) TO web_anon;
 
 INSERT INTO api.users(email, pwd, role) VALUES ('lucie@mail.com', 'jaimelesmirabelles123', 'todo_user');
-
-
--- user storage
-CREATE SCHEMA IF NOT EXISTS basic_auth;
-
-create table
-basic_auth.users (
-  email    text primary key check ( email ~* '^.+@.+\..+$' ),
-  pass     text not null check (length(pass) < 512),
-  role     name not null check (length(role) < 512)
-);
-
-
