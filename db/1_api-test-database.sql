@@ -80,66 +80,40 @@ BEGIN
 END;
 $$;
 
-
-
-CREATE OR REPLACE FUNCTION api.jwt_url_encode(data BYTEA)
-  RETURNS TEXT
-LANGUAGE SQL
-AS $$
-	SELECT translate(encode(data, 'base64'), E'+/=\n', '-_'); -- 
-$$;
-
-CREATE OR REPLACE FUNCTION api.jwt_algorithm_sign(signables TEXT, secret TEXT, algorithm TEXT)
-  RETURNS TEXT
-LANGUAGE SQL
-AS $$
-WITH
-    alg AS (
-     SELECT CASE
-     WHEN algorithm = 'HS256'
-       THEN 'sha256'
-     WHEN algorithm = 'HS384'
-       THEN 'sha384'
-     WHEN algorithm = 'HS512'
-       THEN 'sha512'
-     ELSE '' END AS id) -- hmac throws error
-SELECT api.jwt_url_encode(hmac(signables, secret, alg.id))
-FROM alg;
-$$;
-
--- Création d'un JWT à partir d'une clef secrète
--- PAYLOAD : email + role ? ??
-CREATE OR REPLACE FUNCTION api.jwt_sign(payload JSON, secret TEXT)
-RETURNS TEXT
-LANGUAGE SQL
-AS $$
-WITH
-    header AS (
-      SELECT api.jwt_url_encode(convert_to('{"alg":"HS256","typ":"JWT"}', 'utf8')) AS data),
-    payload AS (
-      SELECT api.jwt_url_encode(convert_to(payload :: TEXT, 'utf8')) AS data),
-    signables AS (
-      SELECT header.data || '.' || payload.data AS data
-      FROM header, payload
-  )
-SELECT signables.data || '.' || api.jwt_algorithm_sign(signables.data, secret, 'HS256')
-FROM signables;
-$$;
-
--- connexion
-CREATE OR REPLACE FUNCTION api.login(email text, pwd text, OUT TOKEN text) 
+-- générer le JWL dans le SQL
+CREATE OR REPLACE FUNCTION jwt_test(OUT token text)
+	RETURNS TEXT
 	LANGUAGE plpgsql
+AS $$
+BEGIN
+	SELECT public.sign(row_to_json(r), 'jaime_lesmirabelles_etleslasagnes') AS token
+	FROM (SELECT 'my_role'::TEXT AS role, extract(epoch FROM now())::INTEGER + 300 AS exp) r;
+END;
+$$;
+
+-- Fonction de connexion : crée accessible via le endpoitn "rpc/login"
+-- email : l'email (au cas où en s'en doutait pas)
+-- pwd : le mot de passe (idem)
+-- token : le token généré -> particularité ici, le paramètre est en "sortie" (mot clé "out") qui indique que la valaeur peut être récupérée par la fonction appelante (en gros : modification possible de token)
+-- Permet d'avoir un type de retour nommé, ce qui peut être cool.
+-- Dans ce cas pas besoin d'avoir un "RETURN" explicite
+CREATE OR REPLACE FUNCTION api.login(email text, pwd text, OUT token text) 
+LANGUAGE plpgsql
 AS $$
 DECLARE
 	_role name; 
 BEGIN
+	-- Vérification du rôle de l'utilisateur
 	SELECT api.user_role(email, pwd) INTO _role;
 	IF _role IS NULL THEN
 		RAISE invalid_password USING message = 'invalid user or password';
 	END IF;
 	
-	SELECT api.jwt_sign(row_to_json(r), 'jaime_lesmirabelles_etleslasagnes') /*AS token*/
-	FROM (SELECT _role AS role, login.email AS email, extract(epoch FROM now())::integer + 60*60 AS exp) r INTO token;
+	-- Tambouille pour construire le JWT
+	-- 'r' va contenir une ligne correspondant au payload du JWT : "role", "email" et "exp"
+	-- La sous-requête est d'abord interprétée avant de faire appel à "api.jwt_sign" (sinon ça marche pas, c'eeeesst normaaaal)
+	SELECT api.jwt_sign(row_to_json(r), 'jaime_lesmirabelles_etleslasagnes')
+	FROM (SELECT _role AS "role", login.email AS email, extract(epoch FROM now())::integer + 60 * 60 AS exp) r INTO token;
 END;
 $$;
 
@@ -149,3 +123,17 @@ GRANT EXECUTE ON FUNCTION api.login(text, text) TO web_anon;
 GRANT EXECUTE ON FUNCTION api.user_role(text, text) TO web_anon;
 
 INSERT INTO api.users(email, pwd, role) VALUES ('lucie@mail.com', 'jaimelesmirabelles123', 'todo_user');
+-- https://www.babelio.com/livres/Taylor-Nous-sommes-Bob-tome-1--Nous-sommes-Legion/1205297
+INSERT INTO api.users(email, pwd, role) VALUES ('bob@bob.bob', 'bob', 'todo_user');
+
+-- user storage
+CREATE SCHEMA IF NOT EXISTS basic_auth;
+
+create table
+basic_auth.users (
+  email    text primary key check ( email ~* '^.+@.+\..+$' ),
+  pass     text not null check (length(pass) < 512),
+  role     name not null check (length(role) < 512)
+);
+
+
