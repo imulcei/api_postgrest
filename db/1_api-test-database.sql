@@ -125,15 +125,3 @@ GRANT EXECUTE ON FUNCTION api.user_role(text, text) TO web_anon;
 INSERT INTO api.users(email, pwd, role) VALUES ('lucie@mail.com', 'jaimelesmirabelles123', 'todo_user');
 -- https://www.babelio.com/livres/Taylor-Nous-sommes-Bob-tome-1--Nous-sommes-Legion/1205297
 INSERT INTO api.users(email, pwd, role) VALUES ('bob@bob.bob', 'bob', 'todo_user');
-
--- user storage
-CREATE SCHEMA IF NOT EXISTS basic_auth;
-
-create table
-basic_auth.users (
-  email    text primary key check ( email ~* '^.+@.+\..+$' ),
-  pass     text not null check (length(pass) < 512),
-  role     name not null check (length(role) < 512)
-);
-
-
