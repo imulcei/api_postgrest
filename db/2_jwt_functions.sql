@@ -1,6 +1,6 @@
 -- Permet d'encoder un tableau d'octets (BYTE ARRAY) contenant les données d'un JWT en chaîne de caractères sans 
 -- "data" correspond au HWT à encoder
-CREATE OR REPLACE FUNCTION api.jwt_url_encode(data BYTEA)
+CREATE OR REPLACE FUNCTION api.jwt_url_encode("data" BYTEA)
 RETURNS TEXT
 LANGUAGE plpgsql
 AS $$
@@ -104,7 +104,7 @@ $$;
 
 -- Création d'un JWT
 -- Plus d'informations sur le contenu d'un JWT : https://jwt.io/
-CREATE OR REPLACE FUNCTION api.jwt_sign(payload JSON, "secret" TEXT)
+CREATE OR REPLACE FUNCTION api.sign_jwt(payload JSON, "secret" TEXT)
 RETURNS TEXT
 LANGUAGE plpgsql
 AS $$
@@ -140,7 +140,7 @@ $$;
 -- Ci-dessous la version en SQL
 -- Création d'un JWT à partir d'une clef secrète
 -- PAYLOAD : email + role ? ??
--- CREATE OR REPLACE FUNCTION api.jwt_sign(payload JSON, secret TEXT)
+-- CREATE OR REPLACE FUNCTION api.sign_jwt(payload JSON, secret TEXT)
 -- RETURNS TEXT
 -- LANGUAGE SQL
 -- AS $$

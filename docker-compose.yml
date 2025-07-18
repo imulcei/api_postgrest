@@ -3,12 +3,11 @@ services:
     image: postgrest/postgrest
     ports:
       - "3000:3000"
+    volumes:
+      - ./conf/postgrest.conf:/etc/postgrest.conf
     environment:
-      PGRST_DB_URI: postgres://authenticator:mysecretpassword@api-test-db:5432/apitest
-      PGRST_DB_SCHEMAS: api
-      PGRST_DB_ANON_ROLE: web_anon
-      PGRST_JWT_SECRET: jaime_lesmirabelles_etleslasagnes
-      PGRST_OPENAPI_SERVER_PROXY_URI: http://127.0.0.1:3000
+      PGRST_JWT_SECRET: "${JWT_SECRET}"  # Secret injecté dynamiquement
+    command: postgrest /etc/postgrest.conf
     depends_on:
       postgres:
         condition: service_healthy # Ajout d'une condition sur healthcheck pour attendre le démarrage correct du container Postgre

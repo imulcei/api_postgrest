@@ -1,5 +1,15 @@
 CREATE SCHEMA api; 
 
+ALTER DATABASE apitest SET app.jwt_secret = '${JWT_SECRET}';
+
+
+CREATE OR REPLACE FUNCTION api.pre_config() RETURNS VOID AS $$
+BEGIN
+    EXECUTE format('SET pgrst.jwt_secret = %L', current_setting('app.settings.jwt_secret'));
+END;
+$$ LANGUAGE plpgsql;
+
+
 CREATE TABLE api.todos (
 	id SERIAL NOT NULL PRIMARY KEY,
 	done BOOLEAN NOT NULL DEFAULT FALSE,
@@ -80,17 +90,6 @@ BEGIN
 END;
 $$;
 
--- générer le JWL dans le SQL
-CREATE OR REPLACE FUNCTION jwt_test(OUT token text)
-	RETURNS TEXT
-	LANGUAGE plpgsql
-AS $$
-BEGIN
-	SELECT public.sign(row_to_json(r), 'jaime_lesmirabelles_etleslasagnes') AS token
-	FROM (SELECT 'my_role'::TEXT AS role, extract(epoch FROM now())::INTEGER + 300 AS exp) r;
-END;
-$$;
-
 -- Fonction de connexion : crée accessible via le endpoitn "rpc/login"
 -- email : l'email (au cas où en s'en doutait pas)
 -- pwd : le mot de passe (idem)
@@ -99,23 +98,41 @@ $$;
 -- Dans ce cas pas besoin d'avoir un "RETURN" explicite
 CREATE OR REPLACE FUNCTION api.login(email text, pwd text, OUT token text) 
 LANGUAGE plpgsql
-AS $$
+AS 
+$$
 DECLARE
-	_role name; 
+    _role name; 
+    jwt_secret text;
 BEGIN
-	-- Vérification du rôle de l'utilisateur
-	SELECT api.user_role(email, pwd) INTO _role;
-	IF _role IS NULL THEN
-		RAISE invalid_password USING message = 'invalid user or password';
-	END IF;
-	
-	-- Tambouille pour construire le JWT
-	-- 'r' va contenir une ligne correspondant au payload du JWT : "role", "email" et "exp"
-	-- La sous-requête est d'abord interprétée avant de faire appel à "api.jwt_sign" (sinon ça marche pas, c'eeeesst normaaaal)
-	SELECT api.jwt_sign(row_to_json(r), 'jaime_lesmirabelles_etleslasagnes')
-	FROM (SELECT _role AS "role", login.email AS email, extract(epoch FROM now())::integer + 60 * 60 AS exp) r INTO token;
+    -- Récupérer le rôle de l'utilisateur
+    SELECT api.user_role(login.email, login.pwd) INTO _role;
+    IF _role IS NULL THEN
+        RAISE invalid_password USING message = 'invalid user or password';
+    END IF;
+    
+    -- Récupérer dynamiquement le secret JWT
+    BEGIN
+        jwt_secret := current_setting('app.jwt_secret');
+    EXCEPTION WHEN undefined_object THEN
+        RAISE EXCEPTION 'JWT secret not configured in database settings'
+        USING HINT = 'Execute: ALTER DATABASE current SET app.jwt_secret = ''your-secret''';
+    END;
+    
+    -- Génération du JWT avec le secret récupéré dynamiquement
+    SELECT api.sign_jwt(
+        row_to_json(r), 
+        jwt_secret
+    )
+    INTO token
+    FROM (
+        SELECT 
+            _role AS "role", 
+            login.email AS email, 
+            extract(epoch FROM now())::integer + 60 * 60 AS exp
+    ) r;
 END;
 $$;
+
 
 GRANT SELECT ON api.users TO web_anon;
 GRANT SELECT ON api.users TO authenticator;
@@ -133,7 +150,9 @@ create table
 basic_auth.users (
   email    text primary key check ( email ~* '^.+@.+\..+$' ),
   pass     text not null check (length(pass) < 512),
-  role     name not null check (length(role) < 512)
+  "role"     name not null check (length("role") < 512)
 );
+
+
 
 
